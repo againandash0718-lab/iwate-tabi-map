@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>いわて旅ぬりマップ</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#263748;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif}
+header{background:#234466;color:white;padding:21px 18px}h1{font-size:22px;margin:0 0 6px}header p{margin:0;font-size:13px;opacity:.9}
+main{max-width:760px;margin:auto;padding:14px}.panel{background:white;border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px #20304012}
+.stats{display:flex;justify-content:space-between;align-items:center;font-weight:700}.count{font-size:22px;color:#23628c}
+.progress{height:10px;background:#e5edf3;border-radius:9px;margin-top:12px;overflow:hidden}.bar{height:100%;width:0;background:#2a7db2;transition:width .2s}
+#map{width:100%;height:auto;display:block;touch-action:pan-y}path.area{stroke:#475767;stroke-width:.85;vector-effect:non-scaling-stroke;cursor:pointer;transition:fill .12s}path.area:focus{outline:none;stroke:#f18c27;stroke-width:2.5}.map-label{font-size:8px;font-weight:700;fill:#263748;stroke:#fff;stroke-width:2.5px;paint-order:stroke;pointer-events:none;text-anchor:middle;dominant-baseline:middle}.map-label.on{fill:#fff;stroke:#24394a;stroke-width:2px}
+.status{text-align:center;font-size:13px;color:#667789;padding:10px}.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.controls button,.actions button{border:0;border-radius:10px;padding:11px 14px;background:#e8f0f6;color:#24435d;font-weight:700}
+.controls button.active,.actions button.primary{background:#286b99;color:white}
+h2{font-size:17px;margin:5px 0 12px}.municipalities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.municipalities button{border:0;border-radius:9px;padding:11px 2px;background:#e9eef3;color:#273b4d;font-weight:700;font-size:12px}
+.municipalities button.visited{background:#287caf;color:white}
+.note{font-size:12px;line-height:1.6;color:#697786}.actions{display:flex;gap:8px;margin-top:14px}.actions button{flex:1}
+</style></head><body>
+<header><h1>いわて旅ぬりマップ</h1><p>まだ行っていない市町村が、ひと目でわかる。</p></header>
+<main>
+<section class="panel"><div class="stats"><span>岩手県の訪問記録</span><span class="count" id="count">0 / 33</span></div><div class="progress"><div class="bar" id="bar"></div></div></section>
+<section class="panel"><div class="controls"><span>地図の色：</span><button class="active" id="blue">青</button><button id="orange">オレンジ</button><button id="green">緑</button></div>
+<div class="status" id="status">白地図を読み込んでいます…</div><svg id="map" viewBox="0 0 500 670" role="img" aria-label="岩手県の市町村白地図"></svg>
+<p class="note">色を選んで市町村をタップすると塗れます。別の色を選んでタップすると色が変わります。同じ色でもう一度タップすると未訪問に戻ります。</p></section>
+<section class="panel"><h2>市町村一覧</h2><div class="municipalities" id="list"></div>
+<div class="actions"><button class="primary" id="export">バックアップ保存</button><button id="import">バックアップ読込</button><input id="file" type="file" accept=".json,application/json" hidden></div>
+<p class="note">記録はこのブラウザ内に自動保存します。ブラウザのデータを削除すると消える可能性があるため、時々バックアップしてください。</p></section>
+<p class="note">境界データ：国土数値情報を加工した公開GeoJSON（ricewin/simplify-japan-geojson）。道路表示・訪問日・写真は今後追加予定。</p>
+</main>
+<script>
+const names=['盛岡市','宮古市','大船渡市','花巻市','北上市','久慈市','遠野市','一関市','陸前高田市','釜石市','二戸市','八幡平市','奥州市','滝沢市','雫石町','葛巻町','岩手町','紫波町','矢巾町','西和賀町','金ケ崎町','平泉町','住田町','大槌町','山田町','岩泉町','田野畑村','普代村','軽米町','野田村','九戸村','洋野町','一戸町'];
+const codes=['03201','03202','03203','03205','03206','03207','03208','03209','03210','03211','03213','03214','03215','03216','03301','03302','03303','03321','03322','03366','03381','03402','03441','03461','03482','03483','03484','03485','03501','03503','03506','03507','03524'];
+const codeName=Object.fromEntries(codes.map((c,i)=>[c,names[i]]));
+const key='iwate-tabi-nuri-v2';let visited={},color='#287caf';
+try{visited=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
+const list=document.getElementById('list'),map=document.getElementById('map'),status=document.getElementById('status');
+function save(){localStorage.setItem(key,JSON.stringify(visited))}
+function fillFor(name){const v=visited[name];return v?(typeof v==='string'?v:'#287caf'):'#fff'}
+function render(){const n=names.filter(x=>visited[x]).length;document.getElementById('count').textContent=n+' / 33';document.getElementById('bar').style.width=(n/33*100)+'%';
+list.innerHTML='';names.forEach(name=>{const b=document.createElement('button');b.textContent=name;b.className=visited[name]?'visited':'';b.onclick=()=>toggle(name);list.appendChild(b)});
+map.querySelectorAll('path[data-name]').forEach(p=>{p.setAttribute('fill',fillFor(p.dataset.name))});map.querySelectorAll('.map-label').forEach(t=>t.setAttribute('class','map-label'+(visited[t.dataset.name]?' on':'')))}
+function toggle(name){const old=visited[name];if(old && fillFor(name)===color){delete visited[name]}else{visited[name]=color}save();render();status.textContent=name+(visited[name]?'：訪問済み（色を設定しました）':'：未訪問に戻しました')}
+for(const [id,c] of [['blue','#287caf'],['orange','#f47725'],['green','#2c9a74']]){document.getElementById(id).onclick=()=>{color=c;document.querySelectorAll('.controls button').forEach(b=>b.classList.toggle('active',b.id===id));render()}}
+document.getElementById('export').onclick=()=>{const data=JSON.stringify({version:2,visited},null,2),blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='iwate-tabi-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+document.getElementById('import').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text()),v=o.visited||o;if(!v||typeof v!=='object')throw Error();visited=Object.fromEntries(names.filter(n=>v[n]).map(n=>[n,typeof v[n]==='string'?v[n]: '#287caf']));save();render();alert('バックアップを読み込みました')}catch(e){alert('バックアップを読み込めませんでした')}};
+function collect(g,arr){if(!g)return;if(g.type==='Polygon')arr.push(...g.coordinates);if(g.type==='MultiPolygon')g.coordinates.forEach(poly=>arr.push(...poly));}
+function draw(data){let features=data.type==='FeatureCollection'?data.features:data.type==='Feature'?[data]:[];
+const byName={};features.forEach(f=>{const p=f.properties||{};let name=names.find(n=>n===p.N03_004||n===p.name||n===p.city||n===p['市区町村']||n===p.N03_003);if(!name){const code=String(p.N03_007||p.code||p.id||f.id||'').padStart(5,'0').slice(0,5);name=codeName[code]}if(name){(byName[name]??=[]).push(f.geometry)}});
+const all=[];Object.values(byName).flat().forEach(g=>collect(g,all));if(!all.length)throw Error('地図データの形式が違います');
+const coords=all.flat(),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+const mid=(miny+maxy)/2*Math.PI/180,k=Math.cos(mid),w=(maxx-minx)*k,h=maxy-miny,scale=Math.min(470/w,640/h),ox=(500-w*scale)/2,oy=(670-h*scale)/2;
+const pt=p=>[(ox+(p[0]-minx)*k*scale).toFixed(2),(oy+(maxy-p[1])*scale).toFixed(2)];
+map.innerHTML='';Object.entries(byName).forEach(([name,gs])=>{let d='';gs.forEach(g=>{const rings=[];collect(g,rings);rings.forEach(r=>{if(!r.length)return;d+='M'+r.map(p=>pt(p).join(',')).join('L')+'Z'})});const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',d);path.setAttribute('class','area');path.setAttribute('fill-rule','evenodd');path.dataset.name=name;path.setAttribute('aria-label',name);path.onclick=()=>toggle(name);map.appendChild(path)});
+// 市町村名は最も大きい領域の内部に配置（島・凹形でもできるだけ内側へ）
+function inside(p,ring){let hit=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])hit=!hit}return hit}
+function labelPoint(gs){let best=null,bestArea=0;gs.forEach(g=>{const rings=[];collect(g,rings);rings.forEach(r=>{if(r.length<3)return;const q=r.map(p=>pt(p).map(Number));let xs=q.map(p=>p[0]),ys=q.map(p=>p[1]);let loX=Math.min(...xs),hiX=Math.max(...xs),loY=Math.min(...ys),hiY=Math.max(...ys);const area=(hiX-loX)*(hiY-loY);if(area<=bestArea)return;let choice=null,score=-1;for(let y=loY+(hiY-loY)/12;y<hiY;y+=(hiY-loY)/6){for(let x=loX+(hiX-loX)/12;x<hiX;x+=(hiX-loX)/6){if(!inside([x,y],q))continue;let d=Math.min(x-loX,hiX-x,y-loY,hiY-y);if(d>score){score=d;choice=[x,y]}}}if(choice){best=choice;bestArea=area}})});return best}
+Object.entries(byName).forEach(([name,gs])=>{const p=labelPoint(gs);if(!p)return;const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',p[0]);t.setAttribute('y',p[1]);t.setAttribute('class','map-label');t.dataset.name=name;t.textContent=name;map.appendChild(t)});
+status.textContent=`白地図を表示しました（${Object.keys(byName).length} / 33市町村）`;render()}
+async function load(){const urls=[
+'https://raw.githubusercontent.com/ricewin/simplify-japan-geojson/main/geojson/03.geojson',
+'https://raw.githubusercontent.com/kyodo-official/japan-choropleth/main/data/geojson/by-prefecture/03/municipalities.geojson'
+];for(const u of urls){try{const r=await fetch(u);if(!r.ok)continue;const j=await r.json();draw(j);return}catch(e){console.warn(e)}}status.textContent='地図を読み込めませんでした。通信環境を確認して再読み込みしてください。市町村一覧は使えます。'}
+render();load();
+</script></body></html>
